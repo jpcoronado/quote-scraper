@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import logging
 from time import sleep
-from config import BASE_URL, HEADERS
+from .config import BASE_URL, HEADERS
 
 
 def fetch_page(url):
@@ -75,6 +75,4 @@ def fetch_author_details(bio_link):
     except AttributeError:
         logging.warning(f"Could not extract author details from {full_url}")
         return None, None
-
-
 

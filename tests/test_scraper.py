@@ -1,87 +1,102 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from quote_scraper import fetch_page, scrape_quotes, fetch_author_details 
+import requests
+from quote_scraper.scraper import fetch_page, scrape_quotes, fetch_author_details
+from quote_scraper.config import BASE_URL, HEADERS
 
-class TestScraper(unittest.TestCase):
-
-    @patch("scraper.requests.get")
+class TestScraperFunctions(unittest.TestCase):
+    @patch('quote_scraper.scraper.requests.get')
     def test_fetch_page_success(self, mock_get):
-        """
-        Test fetch_page() when the request is successful.
-        """
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>Mock Page</body></html>"
-        mock_get.return_value = mock_response
+        """Test fetch_page() returns the expected HTML content on a successful request."""
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.text = "<html><body>Fake page content</body></html>"
+        fake_response.raise_for_status = MagicMock()
+        mock_get.return_value = fake_response
+        
+        url = "http://example.com"
+        result = fetch_page(url)
+        self.assertEqual(result, fake_response.text)
+        mock_get.assert_called_once_with(url, headers=HEADERS)
 
-        result = fetch_page("http://mockurl.com")
-        self.assertEqual(result, "<html><body>Mock Page</body></html>")
-
-    @patch("scraper.requests.get")
+    @patch('quote_scraper.scraper.requests.get')
     def test_fetch_page_failure(self, mock_get):
-        """
-        Test fetch_page() when the request fails.
-        """
-        mock_get.side_effect = Exception("Request failed")
-        result = fetch_page("http://mockurl.com")
+        """Test fetch_page() returns None when a RequestException occurs."""
+        mock_get.side_effect = requests.RequestException("Error occurred")
+        result = fetch_page("http://example.com")
         self.assertIsNone(result)
 
+    @patch('quote_scraper.scraper.sleep', return_value=None)  # bypass delay in tests
+    @patch('quote_scraper.scraper.fetch_page')
+    def test_scrape_quotes_success(self, mock_fetch_page, mock_sleep):
+        """Test scrape_quotes() extracts quotes correctly from HTML."""
 
-    @patch("scraper.fetch_page")
-    def test_scrape_quotes(self, mock_fetch_page):
-        """
-        Test scrape_quotes() to make sure they extract quotes correctly.
-        """
-        mock_fetch_page.return_value = '''
-        <html>
-            <body>
-                <div>
-                    <span class="text">"Mock Quote"</span>
-                    <span class="author">Mock Author</span>
-                    <a href="/mock-bio"></a>
-                </div>
-            </body>
-        </html>
-        '''
-        expected_result = [{"text": '"Mock Quote"', "author": "Mock Author", "bio_link": "/mock-bio"}]
-
-        result = scrape_quotes()
-        self.assertEqual(result, expected_result)
-
-
-    @patch("scraper.fetch_page")
-    def test_fetch_author_detail_success(self, mock_fetch_page):
-        """
-        Test fetch_author_details() when it successfully retrieves details.
-        """
-        mock_fetch_page.return_value = """
-
-        <html>
-            <body>
-                <span class="author-born-date">January 1, 1900</span>
-                <span class="author-born-location>in Mock City</span>
-            </body>
-        </html>
+        fake_html_page1 = """
+            <html>
+                <body>
+                    <div class="quote">
+                        <span class="text">"Quote 1"</span>
+                        <span class="author">Author 1</span>
+                        <a href="/bio/1"></a>
+                    </div>
+                    <div class="quote">
+                        <span class="text">"Quote 2"</span>
+                        <span class="author">Author 2</span>
+                        <a href="/bio/2"></a>
+                    </div>
+                    <div class="next">
+                        <a href="/page/2">Next</a>
+                    </div>
+                </body>
+            </html>
         """
 
-        birth_date, birth_place = fetch_author_details("/mock_bio")
-        self.assertEqual(birth_date, "January 1, 1900")
-        self.assertEqual(birth_place, "in Mock City")
+        fake_html_page2 = """
+            <html>
+                <body>
+                    <div class="quote">
+                        <span class="text">"Quote 3"</span>
+                        <span class="author">Author 3</span>
+                        <a href="/bio/3"></a>
+                    </div>
+                </body>
+            </html>
+        """
+        mock_fetch_page.side_effect = [fake_html_page1, fake_html_page2]
+        
+        quotes = scrape_quotes()
+        expected_quotes = [
+            {"text": '"Quote 1"', "author": "Author 1", "bio_link": "/bio/1"},
+            {"text": '"Quote 2"', "author": "Author 2", "bio_link": "/bio/2"},
+            {"text": '"Quote 3"', "author": "Author 3", "bio_link": "/bio/3"}
+        ]
+        self.assertEqual(quotes, expected_quotes)
+        self.assertEqual(mock_fetch_page.call_count, 2)
 
-    @patch("scraper.fetch_page") 
+    @patch('quote_scraper.scraper.fetch_page')
+    def test_fetch_author_details_success(self, mock_fetch_page):
+        """Test fetch_author_details() returns correct details from valid HTML."""
+        fake_html = """
+            <html>
+                <body>
+                    <span class="author-born-date">January 1, 2000</span>
+                    <span class="author-born-location">in Test City</span>
+                </body>
+            </html>
+        """
+        mock_fetch_page.return_value = fake_html
+        birth_date, birth_place = fetch_author_details("/bio/test")
+        self.assertEqual(birth_date, "January 1, 2000")
+        self.assertEqual(birth_place, "in Test City")
+
+    @patch('quote_scraper.scraper.fetch_page')
     def test_fetch_author_details_failure(self, mock_fetch_page):
-        """
-        Test fetch_author_details() when the elements are missing.
-        """
-        mock_fetch_page.return_value = "<html><body></body></html>"
-
-        birth_date, birth_place = fetch_author_details("/mock-bio")
+        """Test fetch_author_details() returns (None, None) when details cannot be extracted."""
+        fake_html = "<html><body></body></html>"
+        mock_fetch_page.return_value = fake_html
+        birth_date, birth_place = fetch_author_details("/bio/test")
         self.assertIsNone(birth_date)
         self.assertIsNone(birth_place)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
-
-
-
-        
