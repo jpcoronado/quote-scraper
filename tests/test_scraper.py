@@ -48,7 +48,40 @@ class TestScraper(unittest.TestCase):
         result = scrape_quotes()
         self.assertEqual(result, expected_result)
 
-        # to do: more tests
+
+    @patch("scraper.fetch_page")
+    def test_fetch_author_detail_success(self, mock_fetch_page):
+        """
+        Test fetch_author_details() when it successfully retrieves details.
+        """
+        mock_fetch_page.return_value = """
+
+        <html>
+            <body>
+                <span class="author-born-date">January 1, 1900</span>
+                <span class="author-born-location>in Mock City</span>
+            </body>
+        </html>
+        """
+
+        birth_date, birth_place = fetch_author_details("/mock_bio")
+        self.assertEqual(birth_date, "January 1, 1900")
+        self.assertEqual(birth_place, "in Mock City")
+
+    @patch("scraper.fetch_page") 
+    def test_fetch_author_details_failure(self, mock_fetch_page):
+        """
+        Test fetch_author_details() when the elements are missing.
+        """
+        mock_fetch_page.return_value = "<html><body></body></html>"
+
+        birth_date, birth_place = fetch_author_details("/mock-bio")
+        self.assertIsNone(birth_date)
+        self.assertIsNone(birth_place)
+
+if __name__ == "__main__":
+    unittest.main()
+
 
 
         
