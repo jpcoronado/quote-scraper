@@ -1,2 +1,2 @@
 ### quote-scraper
-Toy projec to learn about web scraping.
+Toy project to learn about web scraping.
