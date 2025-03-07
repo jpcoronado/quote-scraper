@@ -1,0 +1,1 @@
+from .scraper import fetch_page, scrape_quotes, fetch_author_details 
